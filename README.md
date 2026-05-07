@@ -146,7 +146,7 @@ Blurred images and a `blur_results.json` are saved to `./blurred/` (or `--output
 ## How it works
 
 ### Plate detection (`detect.py` + `blur.py`)
-1. **RF-DETR Base** (ONNX, 560×560) — finds plate bounding boxes
+1. **RF-DETR Base** (ONNX, 784×784) — finds plate bounding boxes
 2. **Geometry filter** — rejects boxes with wrong aspect ratio (< 1.5 or > 9.0) or too large (> 15% of image)
 3. **fast-plate-ocr** (`european-plates-mobile-vit-v2-model`) — reads plate text
 4. **Format validation** — regex check against all Dutch sidecodes (1–14), agricultural, diplomatic and moped formats
@@ -166,6 +166,6 @@ Blurred images and a `blur_results.json` are saved to `./blurred/` (or `--output
 Plate detector hosted on HuggingFace: [Rickkosse/rfdetr_licences_plate_detector](https://huggingface.co/Rickkosse/rfdetr_licences_plate_detector)
 
 - Architecture: RF-DETR Base, 1 class (`license_plate`)
-- Resolution: 560×560
+- Resolution: 784×784
 - Training: synthetic plates on BDD100K + real-world crops
 - EMA checkpoint, cosine LR schedule
