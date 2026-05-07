@@ -76,20 +76,17 @@ Detects persons, vehicles and license plates. Blurs all persons and plates by de
 Optionally exempt the driver of a specific vehicle from blurring.
 
 ```bash
-# Blur all persons and plates (YOLO, default)
+# Blur all persons and plates
 python blur.py --images ./photos
 
-# Use RF-DETR for better person/vehicle detection (recommended)
-python blur.py --images ./photos --detector rfdetr
-
 # Exempt the driver of a specific plate from blurring
-python blur.py --images ./photos --detector rfdetr --exempt-plate OL70ZL
+python blur.py --images ./photos --exempt-plate OL70ZL
 
 # Single image with exempt plate
 python blur.py --images photo.jpg --output ./blurred --exempt-plate JKB18V
 
 # RF-DETR Large (more accurate, slower)
-python blur.py --images ./photos --detector rfdetr --rfdetr-large
+python blur.py --images ./photos --rfdetr-large
 
 # Adjust confidence thresholds
 python blur.py --images ./photos --confidence-person 0.5 --confidence-plate 0.4
@@ -118,15 +115,12 @@ python blur.py --images ./photos --plate-model ./inference_model.onnx
 
 ![result](examples/blur_result.png)
 
-### Detector options
+### Model options
 
 | Flag | Model | Speed | Accuracy |
 |---|---|---|---|
-| *(default)* | YOLO11n | Fast | Good |
-| `--detector rfdetr` | RF-DETR Base (COCO) | Slower | Higher |
-| `--detector rfdetr --rfdetr-large` | RF-DETR Large (COCO) | Slowest | Best |
-
-RF-DETR is recommended when persons are partially visible or photographed from an angle.
+| *(default)* | RF-DETR Base (COCO) | Fast | High |
+| `--rfdetr-large` | RF-DETR Large (COCO) | Slower | Higher |
 
 ### JSON output
 
@@ -158,7 +152,7 @@ Blurred images and a `blur_results.json` are saved to `./blurred/` (or `--output
 4. **Format validation** — regex check against all Dutch sidecodes (1–14), agricultural, diplomatic and moped formats
 
 ### Privacy blurring (`blur.py`)
-1. **Person/vehicle detection** — YOLO11n or RF-DETR (COCO 80 classes)
+1. **Person/vehicle detection** — RF-DETR Base or Large (COCO 80 classes)
 2. **Face fallback** — OpenCV DNN SSD ResNet10 runs multiscale on each vehicle crop and the full image to catch persons the main detector missed
 3. **Plate association** — each detected plate is linked to the vehicle bbox it overlaps most
 4. **Exempt logic** — if `--exempt-plate` is set, persons overlapping the matched vehicle are not blurred

@@ -1,6 +1,5 @@
 onnxruntime
 fast-plate-ocr
-ultralytics
 rfdetr
 opencv-python
 numpy

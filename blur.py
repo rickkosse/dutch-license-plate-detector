@@ -5,7 +5,7 @@ Detects persons, vehicles and license plates in images.
 All persons are blurred, except those associated with a specified exempt plate.
 
 Dependencies:
-    pip install ultralytics onnxruntime fast-plate-ocr opencv-python huggingface_hub rfdetr
+    pip install onnxruntime fast-plate-ocr opencv-python huggingface_hub rfdetr
 
 Usage:
     # Blur all persons (YOLO, default)
@@ -37,7 +37,7 @@ import numpy as np
 HF_REPO_ID   = "Rickkosse/rfdetr_licences_plate_detector"
 ONNX_FILE    = "inference_model.onnx"
 MODEL_CACHE  = Path.home() / ".cache" / "dutch-plate-detector"
-INPUT_SIZE   = 560
+INPUT_SIZE   = 784
 
 FACE_PROTOTXT_URL   = ("https://raw.githubusercontent.com/opencv/opencv/4.x"
                         "/samples/dnn/face_detector/deploy.prototxt")
@@ -98,13 +98,6 @@ def load_plate_session(model_path: Path):
     session = ort.InferenceSession(str(model_path), providers=providers)
     print(f"Plate model: ONNX ({session.get_providers()[0]})")
     return session
-
-
-def load_yolo():
-    from ultralytics import YOLO
-    model = YOLO("yolo11n.pt")   # downloads ~6 MB automatically on first run
-    print("Person/vehicle model: YOLO11n")
-    return model
 
 
 def load_rfdetr(large: bool = False):
@@ -199,22 +192,6 @@ def read_plate(ocr, img_bgr: np.ndarray, bbox: list) -> str:
     return text if _NL_PLATE_RE.match(re.sub(r'[\-\s]', '', text).upper()) else ""
 
 
-def detect_persons_vehicles_yolo(yolo, img_bgr: np.ndarray,
-                                  confidence: float = 0.4) -> tuple[list, list]:
-    results = yolo(img_bgr, conf=confidence, verbose=False)[0]
-    persons, vehicles = [], []
-    for box in results.boxes:
-        cls  = int(box.cls[0])
-        conf = float(box.conf[0])
-        x1, y1, x2, y2 = map(int, box.xyxy[0])
-        entry = {"bbox": [x1, y1, x2-x1, y2-y1], "confidence": round(conf, 3)}
-        if cls in PERSON_CLS:
-            persons.append(entry)
-        elif cls in VEHICLE_CLS:
-            vehicles.append(entry)
-    return persons, vehicles
-
-
 def detect_persons_vehicles_rfdetr(model, img_bgr: np.ndarray,
                                     confidence: float = 0.4,
                                     debug: bool = False) -> tuple[list, list]:
@@ -259,12 +236,6 @@ def detect_persons_vehicles_rfdetr(model, img_bgr: np.ndarray,
     return persons, vehicles
 
 
-def detect_persons_vehicles(detector, img_bgr: np.ndarray,
-                             confidence: float, use_rfdetr: bool,
-                             debug: bool = False) -> tuple[list, list]:
-    if use_rfdetr:
-        return detect_persons_vehicles_rfdetr(detector, img_bgr, confidence, debug=debug)
-    return detect_persons_vehicles_yolo(detector, img_bgr, confidence)
 
 
 def detect_faces(net, img_bgr: np.ndarray,
@@ -431,7 +402,7 @@ def draw_debug(img_bgr: np.ndarray, persons: list, vehicles: list,
                     cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 200, 0), 1)
     for p in persons:
         x, y, w, h = p["bbox"]
-        src = p.get("source", "yolo")
+        src = p.get("source", "rfdetr")
         if src == "windshield":
             color, label = (0, 165, 255), "windshield"
         elif src == "face":
@@ -449,17 +420,16 @@ def process_image(img_bgr: np.ndarray, detector, plate_session, ocr,
                   exempt_plate: str | None,
                   confidence_person: float,
                   confidence_plate: float,
-                  use_rfdetr: bool = False,
                   windshield_fallback: bool = False,
                   debug: bool = False) -> tuple[np.ndarray, dict]:
 
-    persons, vehicles = detect_persons_vehicles(detector, img_bgr, confidence_person, use_rfdetr, debug=debug)
+    persons, vehicles = detect_persons_vehicles_rfdetr(detector, img_bgr, confidence_person, debug=debug)
     plate_dets = detect_plates(plate_session, img_bgr, confidence_plate)
 
     if debug:
-        n_yolo_persons  = len(persons)
-        n_yolo_vehicles = len(vehicles)
-        print(f"    [debug] YOLO/RF-DETR: {n_yolo_persons} person(s), {n_yolo_vehicles} vehicle(s), "
+        n_detector_persons  = len(persons)
+        n_detector_vehicles = len(vehicles)
+        print(f"    [debug] RF-DETR: {n_detector_persons} person(s), {n_detector_vehicles} vehicle(s), "
               f"{len(plate_dets)} plate bbox(es)")
         for v in vehicles:
             print(f"    [debug]   vehicle conf={v['confidence']:.2f} bbox={v['bbox']}")
@@ -562,7 +532,7 @@ def process_image(img_bgr: np.ndarray, detector, plate_session, ocr,
 
     if debug:
         print(f"    [debug] total persons to blur: {len(persons)} "
-              f"({len(persons) - n_yolo_persons} from face/windshield fallback)")
+              f"({len(persons) - n_detector_persons} from face/windshield fallback)")
 
     # Blur persons — skip those overlapping with the exempt vehicle
     result = img_bgr.copy()
@@ -624,9 +594,6 @@ def main():
                         help="Output folder (default: ./blurred)")
     parser.add_argument("--exempt-plate",    default=None,
                         help="License plate whose driver should NOT be blurred")
-    parser.add_argument("--detector",        default="yolo",
-                        choices=["yolo", "rfdetr"],
-                        help="Person/vehicle detector: yolo (default) or rfdetr")
     parser.add_argument("--rfdetr-large",    action="store_true",
                         help="Use RFDETRLarge instead of RFDETRBase (rfdetr only)")
     parser.add_argument("--confidence-person", type=float, default=0.3,
@@ -644,12 +611,10 @@ def main():
     output_dir = Path(args.output)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    use_rfdetr = args.detector == "rfdetr"
-
     print("Loading models...")
     model_path    = Path(args.plate_model) if args.plate_model else get_plate_model_path()
     plate_session = load_plate_session(model_path)
-    detector      = load_rfdetr(args.rfdetr_large) if use_rfdetr else load_yolo()
+    detector      = load_rfdetr(args.rfdetr_large)
     ocr           = load_ocr()
     face_detector  = load_face_detector()
     print()
@@ -680,7 +645,6 @@ def main():
             exempt_plate=args.exempt_plate,
             confidence_person=args.confidence_person,
             confidence_plate=args.confidence_plate,
-            use_rfdetr=use_rfdetr,
             windshield_fallback=args.windshield_fallback,
             debug=args.debug,
         )

@@ -27,7 +27,7 @@ import numpy as np
 HF_REPO_ID   = "Rickkosse/rfdetr_licences_plate_detector"
 ONNX_FILE    = "inference_model.onnx"
 MODEL_CACHE  = Path.home() / ".cache" / "dutch-plate-detector"
-INPUT_SIZE   = 560
+INPUT_SIZE   = 784
 
 IMAGENET_MEAN = np.array([0.485, 0.456, 0.406], dtype=np.float32)
 IMAGENET_STD  = np.array([0.229, 0.224, 0.225], dtype=np.float32)
